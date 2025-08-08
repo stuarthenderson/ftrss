@@ -16,9 +16,10 @@ on:
         description: 'Space‑separated list of feed URLs to process.  Leave blank to use defaults.'
         required: false
 
-# Grant the GITHUB_TOKEN write access
 permissions:
-  contents: write
+  contents: read     # allow reading the repository
+  pages: write       # allow publishing to Pages
+  id-token: write    # required for GitHub Pages deployments
 
 jobs:
   build:
@@ -51,9 +52,9 @@ jobs:
         uses: actions/configure-pages@v3
 
       - name: Upload feed for Pages
-        uses: actions/upload-pages-artifact@v1
+        uses: actions/upload-pages-artifact@v2
         with:
-          path: ./output  # folder containing generated_feed.xml
+          path: ./output         # directory containing generated_feed.xml
 
       - name: Deploy to GitHub Pages
         uses: actions/deploy-pages@v2
