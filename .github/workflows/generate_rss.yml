@@ -16,6 +16,10 @@ on:
         description: 'Space‑separated list of feed URLs to process.  Leave blank to use defaults.'
         required: false
 
+# Grant the GITHUB_TOKEN write access
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
