@@ -1,0 +1,52 @@
+name: Generate and publish article feed
+
+# This workflow runs periodically and on demand to fetch articles mentioned
+# in FT podcasts and rebuild the generated RSS feed.  You can adjust the
+# schedule (in cron syntax) to your preference.  Times are in UTC by
+# default; Europe/London is one hour ahead in summer and may vary.  Here
+# we run every six hours.
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    # Allows manual triggering from the GitHub UI
+    inputs:
+      feed_urls:
+        description: 'Space‑separated list of feed URLs to process.  Leave blank to use defaults.'
+        required: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install feedparser beautifulsoup4
+
+      - name: Generate RSS feed
+        env:
+          FEED_URLS: ${{ github.event.inputs.feed_urls }}
+          # Limit the output feed to episodes from the last 5 days
+          DAYS_LIMIT: 5
+        run: |
+          # Execute the generation script; the feed will be written to
+          # ./output/generated_feed.xml within the repository.
+          python generate_rss_feed.py
+
+      - name: Commit and push changes
+        uses: EndBug/add-and-commit@v7
+        with:
+          author_name: GitHub Actions
+          author_email: actions@github.com
+          message: 'chore: update generated RSS feed'
+          add: 'output/generated_feed.xml'
