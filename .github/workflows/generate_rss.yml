@@ -47,10 +47,9 @@ jobs:
           # ./output/generated_feed.xml within the repository.
           python generate_rss_feed.py
 
-      - name: Commit and push changes
-        uses: EndBug/add-and-commit@v7
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v1
         with:
-          author_name: GitHub Actions
-          author_email: actions@github.com
-          message: 'chore: update generated RSS feed'
-          add: 'output/generated_feed.xml'
+          path: ./output
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v1
