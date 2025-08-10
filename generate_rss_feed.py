@@ -50,7 +50,7 @@ import os
 import sys
 import time
 import email.utils
-from typing import Iterable, List, Dict, Tuple, Optional
+from typing import Iterable, List, Dict, Tuple, Optional, Any
 
 try:
     import feedparser  # type: ignore
@@ -202,6 +202,65 @@ def build_rss_channel(items: List[Dict[str, str]]) -> str:
     return xml_string.decode("utf-8")
 
 
+def generate_html_pages(
+    episodes: List[Dict[str, Any]], output_dir: str, per_page: int = 10
+) -> None:
+    """Generate paginated HTML files listing extracted links.
+
+    Parameters
+    ----------
+    episodes:
+        List of episode dictionaries containing keys ``podcast``,
+        ``episode``, ``pubDate`` and ``links`` (a list of ``title`` and
+        ``url`` pairs).
+    output_dir:
+        Directory where the HTML files will be written.
+    per_page:
+        Number of podcast entries per HTML page.
+    """
+    import html
+
+    total_pages = (len(episodes) + per_page - 1) // per_page
+    for page_num in range(total_pages):
+        start = page_num * per_page
+        page_eps = episodes[start : start + per_page]
+        parts = [
+            "<html><head><meta charset='utf-8'><title>FT Podcast Links - Page {}".format(
+                page_num + 1
+            ),
+            "</title></head><body>",
+        ]
+        for ep in page_eps:
+            date = html.escape(ep["pubDate"])
+            podcast = html.escape(ep["podcast"])
+            episode_title = html.escape(ep["episode"])
+            parts.append(f"<h2>{date} - {podcast}: {episode_title}</h2>")
+            parts.append("<ul>")
+            for link in ep["links"]:
+                title = html.escape(link["title"])
+                url = html.escape(link["url"])
+                parts.append(f"<li><a href='{url}'>{title}</a></li>")
+            parts.append("</ul>")
+
+        nav: List[str] = []
+        if page_num > 0:
+            nav.append(
+                f"<a href='links_page_{page_num}.html'>Previous</a>"
+            )
+        if page_num < total_pages - 1:
+            nav.append(
+                f"<a href='links_page_{page_num + 2}.html'>Next</a>"
+            )
+        if nav:
+            parts.append("<p>" + " | ".join(nav) + "</p>")
+        parts.append("</body></html>")
+
+        html_path = os.path.join(output_dir, f"links_page_{page_num + 1}.html")
+        with open(html_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(parts))
+    print(f"Generated {total_pages} HTML page(s) in {output_dir}")
+
+
 def main() -> int:
     # Determine feed URLs either from the environment or default to FT podcast feeds
     default_feeds = [
@@ -215,6 +274,7 @@ def main() -> int:
         feed_urls = default_feeds
 
     all_items: List[Dict[str, str]] = []
+    episodes: List[Dict[str, Any]] = []
     # Determine age limit (in days) for included episodes.  By default we
     # include only episodes from the last 5 days.  You can override this
     # behaviour by setting the DAYS_LIMIT environment variable to a
@@ -264,6 +324,16 @@ def main() -> int:
                         "description": item_desc,
                     }
                 )
+            episodes.append(
+                {
+                    "podcast": feed_title,
+                    "episode": entry.title,
+                    "pubDate": pub_date,
+                    "links": [
+                        {"title": t, "url": u} for t, u in article_links
+                    ],
+                }
+            )
 
     # Sort items by publication date descending (newest first)
     # Items have pubDate strings in RFC 822 format, parse them back to timestamps
@@ -274,6 +344,7 @@ def main() -> int:
             return 0.0
 
     all_items.sort(key=lambda x: parse_pubdate(x["pubDate"]), reverse=True)
+    episodes.sort(key=lambda x: parse_pubdate(x["pubDate"]), reverse=True)
 
     # Build the feed XML
     rss_xml = build_rss_channel(all_items)
@@ -285,6 +356,8 @@ def main() -> int:
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(rss_xml)
     print(f"Generated feed written to {output_path}")
+
+    generate_html_pages(episodes, output_dir)
     return 0
 
 
