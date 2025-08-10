@@ -8,7 +8,10 @@ podcasts hosted on Acast) and extracts the "free to read" and "mentioned in
 this podcast" links from each episode.  It then produces a new RSS 2.0 feed
 containing one item for each extracted article link.  Each generated item
 includes the article title (or URL if no title is available), the original
-link and a short description referencing the source podcast episode.
+link and a short description referencing the source podcast episode.  In
+addition to the RSS feed, the script also creates a simple HTML page listing
+all collected article links, grouped by their source podcast and episode with
+corresponding publication dates.
 
 Usage
 -----
@@ -21,7 +24,8 @@ from the two FT podcast feeds used in the example problem:
 
 You can override the list of feeds by setting the ``FEED_URLS`` environment
 variable to a space‑delimited list of URLs.  The generated feed will be
-written to ``output/generated_feed.xml`` relative to the repository root.
+written to ``output/generated_feed.xml`` relative to the repository root and
+the accompanying HTML page to ``output/generated_links.html``.
 
 The script requires the ``feedparser`` and ``beautifulsoup4`` libraries.  See
 the accompanying GitHub Action workflow for an example of how to install
@@ -50,7 +54,8 @@ import os
 import sys
 import time
 import email.utils
-from typing import Iterable, List, Dict, Tuple, Optional
+from html import escape
+from typing import Iterable, List, Dict, Tuple, Optional, Any
 
 try:
     import feedparser  # type: ignore
@@ -202,6 +207,61 @@ def build_rss_channel(items: List[Dict[str, str]]) -> str:
     return xml_string.decode("utf-8")
 
 
+def build_html_page(episodes_by_podcast: Dict[str, List[Dict[str, Any]]]) -> str:
+    """Build a simple HTML page listing article links grouped by podcast episode.
+
+    Parameters
+    ----------
+    episodes_by_podcast:
+        Mapping of podcast title to a list of episode dictionaries.  Each
+        episode dictionary contains the keys ``episode_title``, ``pub_date``,
+        ``timestamp`` and ``articles`` (a list of ``{"title", "link"}``).
+
+    Returns
+    -------
+    str
+        HTML content as a string.
+    """
+
+    lines: List[str] = [
+        "<!DOCTYPE html>",
+        "<html>",
+        "<head>",
+        "<meta charset=\"utf-8\">",
+        "<title>FT Podcast Articles</title>",
+        "</head>",
+        "<body>",
+        "<h1>Articles mentioned in FT podcasts</h1>",
+    ]
+
+    # Flatten episodes and sort by publication date (newest first)
+    all_episodes: List[Dict[str, Any]] = []
+    for feed_title, episodes in episodes_by_podcast.items():
+        for episode in episodes:
+            episode = dict(episode)
+            episode["feed_title"] = feed_title
+            all_episodes.append(episode)
+    all_episodes.sort(key=lambda e: e["timestamp"], reverse=True)
+
+    for episode in all_episodes:
+        date_str = email.utils.parsedate_to_datetime(
+            episode["pub_date"]
+        ).date().isoformat()
+        heading = (
+            f"{episode['feed_title']} - {episode['episode_title']} - {date_str}"
+        )
+        lines.append(f"<h2>{escape(heading)}</h2>")
+        lines.append("<ul>")
+        for art in episode["articles"]:
+            art_title = escape(art["title"])
+            art_link = escape(art["link"])
+            lines.append(f'<li><a href="{art_link}">{art_title}</a></li>')
+        lines.append("</ul>")
+
+    lines.extend(["</body>", "</html>"])
+    return "\n".join(lines)
+
+
 def main() -> int:
     # Determine feed URLs either from the environment or default to FT podcast feeds
     default_feeds = [
@@ -215,6 +275,7 @@ def main() -> int:
         feed_urls = default_feeds
 
     all_items: List[Dict[str, str]] = []
+    episodes_by_podcast: Dict[str, List[Dict[str, Any]]] = {}
     # Determine age limit (in days) for included episodes.  By default we
     # include only episodes from the last 28 days.  You can override this
     # behaviour by setting the DAYS_LIMIT environment variable to a
@@ -254,6 +315,7 @@ def main() -> int:
                 # For entries without a published date, include them only if
                 # they were just scraped (i.e. treat them as current)
                 entry_ts = time.time()
+            episode_articles: List[Dict[str, str]] = []
             for title_text, href in article_links:
                 item_desc = f"Article mentioned in '{entry.title}' from {feed_title}."
                 all_items.append(
@@ -262,6 +324,16 @@ def main() -> int:
                         "link": href,
                         "pubDate": pub_date,
                         "description": item_desc,
+                    }
+                )
+                episode_articles.append({"title": title_text, "link": href})
+            if episode_articles:
+                episodes_by_podcast.setdefault(feed_title, []).append(
+                    {
+                        "episode_title": entry.title,
+                        "pub_date": pub_date,
+                        "timestamp": entry_ts,
+                        "articles": episode_articles,
                     }
                 )
 
@@ -285,6 +357,13 @@ def main() -> int:
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(rss_xml)
     print(f"Generated feed written to {output_path}")
+
+    # Build the HTML page
+    html_content = build_html_page(episodes_by_podcast)
+    html_path = os.path.join(output_dir, "generated_links.html")
+    with open(html_path, "w", encoding="utf-8") as f:
+        f.write(html_content)
+    print(f"Generated HTML page written to {html_path}")
     return 0
 
 
