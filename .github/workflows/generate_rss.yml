@@ -42,7 +42,7 @@ jobs:
         env:
           FEED_URLS: ${{ github.event.inputs.feed_urls }}
           # Limit the output feed to episodes from the last 5 days
-          DAYS_LIMIT: 5
+          DAYS_LIMIT: 28
         run: |
           # Execute the generation script; the feed will be written to
           # ./output/generated_feed.xml within the repository.

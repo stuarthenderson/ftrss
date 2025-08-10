@@ -216,15 +216,15 @@ def main() -> int:
 
     all_items: List[Dict[str, str]] = []
     # Determine age limit (in days) for included episodes.  By default we
-    # include only episodes from the last 5 days.  You can override this
+    # include only episodes from the last 28 days.  You can override this
     # behaviour by setting the DAYS_LIMIT environment variable to a
     # positive integer.
     try:
-        days_limit = int(os.environ.get("DAYS_LIMIT", "5"))
+        days_limit = int(os.environ.get("DAYS_LIMIT", "28"))
         if days_limit < 1:
-            days_limit = 5
+            days_limit = 28
     except ValueError:
-        days_limit = 5
+        days_limit = 28
     cutoff_ts = time.time() - days_limit * 24 * 60 * 60
 
     for feed_url in feed_urls:
