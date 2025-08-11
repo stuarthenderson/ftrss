@@ -21,6 +21,9 @@ from the two FT podcast feeds used in the example problem:
 
     https://feeds.acast.com/public/shows/ft-tech-tonic
     https://feeds.acast.com/public/shows/ftnewsbriefing
+    https://feeds.acast.com/public/shows/swamp-notes
+    https://feeds.acast.com/public/shows/ft-politics
+    https://feeds.acast.com/public/shows/the-economics-show-with-soumaya-keynes
 
 You can override the list of feeds by setting the ``FEED_URLS`` environment
 variable to a space‑delimited list of URLs.  The generated feed will be
@@ -267,6 +270,9 @@ def main() -> int:
     default_feeds = [
         "https://feeds.acast.com/public/shows/ft-tech-tonic",
         "https://feeds.acast.com/public/shows/ftnewsbriefing",
+        "https://feeds.acast.com/public/shows/swamp-notes",
+        "https://feeds.acast.com/public/shows/ft-politics",
+        "https://feeds.acast.com/public/shows/the-economics-show-with-soumaya-keynes"
     ]
     feed_urls_env = os.environ.get("FEED_URLS")
     if feed_urls_env:
