@@ -78,12 +78,12 @@ except ImportError:
 
 
 def extract_article_links(description_html: str) -> List[Tuple[str, str]]:
-    """Extract article links from an episode description.
+    """Extract on.ft.com article links from a description.
 
-    Looks for bold headings that contain the keywords "free to read" or
-    "mentioned in this podcast" and returns all anchor tags that
-    immediately follow such headings.  Links that are not FT articles
-    (e.g. mailto links or sign‑up forms) are filtered out.
+    Finds all anchor tags in the HTML whose href domain is ``on.ft.com`` and
+    returns their text and URL. The anchor text is used as the title; if
+    empty, the URL is used instead. Duplicates (by URL) are removed while
+    preserving order.
 
     Parameters
     ----------
@@ -94,74 +94,29 @@ def extract_article_links(description_html: str) -> List[Tuple[str, str]]:
     -------
     list of (title, url):
         A list of article titles (or URL if the title is empty) and
-        corresponding URLs.
+        corresponding URLs for ``on.ft.com`` links.
     """
     soup = BeautifulSoup(description_html or "", "html.parser")
-    article_links: List[Tuple[str, str]] = []
+    results: List[Tuple[str, str]] = []
+    seen: set[str] = set()
 
-    # Keywords to look for in bold headings (case‑insensitive).
-    markers = ["free to read", "mentioned in this podcast"]
-
-    # Iterate over all <strong> tags to find markers.
-    for strong_tag in soup.find_all("strong"):
-        text = strong_tag.get_text(strip=True).lower()
-        if any(marker in text for marker in markers):
-            # Traverse subsequent elements until the next <strong> or <hr>
-            for elem in strong_tag.next_elements:
-                # Skip non‑tag elements (strings, comments, etc.)
-                if not hasattr(elem, "name"):
-                    continue
-                # Stop when another marker or divider is encountered
-                if elem.name in {"strong", "hr"}:
-                    break
-                # Collect <a> tags
-                if elem.name == "a":
-                    href = elem.get("href")
-                    title_text = elem.get_text(strip=True)
-                    # Skip if the anchor contains a nested <strong> (e.g. transcript links)
-                    if elem.find("strong"):
-                        continue
-                    if not href:
-                        continue
-                    # Basic filtering: ignore mailto and obvious newsletter/survey links
-                    href_lower = href.lower()
-                    if href_lower.startswith("mailto:"):
-                        continue
-                    # Exclude certain FT subdomains that typically contain sign‑up pages
-                    exclude_substrings = [
-                        "ft.com/techtonicsurvey",
-                        "ft.com/survey",
-                        "ep.ft.com",
-                        "subscribe",
-                        "newsletters",
-                        "newsletter",
-                        "ft.com/support",
-                    ]
-                    if any(sub in href_lower for sub in exclude_substrings):
-                        continue
-                    # Only accept links that live on the Financial Times domains (ft.com or on.ft.com)
-                    # Many podcast descriptions also contain Twitter spaces or other external content, which
-                    # we exclude by default.  Parse out the domain and check it.
-                    try:
-                        from urllib.parse import urlparse  # imported lazily to avoid overhead
-                        domain = urlparse(href).hostname or ""
-                    except Exception:
-                        domain = ""
-                    if not (domain.endswith("ft.com") or domain.endswith("on.ft.com")):
-                        continue
-                    # If the link text looks like an email address or sign‑up prompt, ignore it
-                    text_lower = title_text.lower()
-                    if any(kw in text_lower for kw in [
-                        "sign up", "subscribe", "transcript", "survey", "newsletter", "twitter"]):
-                        continue
-                    # If the anchor text is empty, fall back to the URL
-                    if not title_text:
-                        title_text = href
-                    article_links.append((title_text, href))
-            # Only process the first matching marker per description
-            if article_links:
-                break
-    return article_links
+    for a in soup.find_all("a"):
+        href = a.get("href")
+        if not href:
+            continue
+        try:
+            from urllib.parse import urlparse
+            host = (urlparse(href).hostname or "").lower()
+        except Exception:
+            host = ""
+        if not host.endswith("on.ft.com"):
+            continue
+        title = a.get_text(strip=True) or href
+        if href in seen:
+            continue
+        seen.add(href)
+        results.append((title, href))
+    return results
 
 
 def build_rss_channel(items: List[Dict[str, str]]) -> str:
